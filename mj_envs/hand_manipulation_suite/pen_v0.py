@@ -5,10 +5,8 @@ from mj_envs.utils.quatmath import quat2euler, euler2quat
 from mujoco_py import MjViewer
 import os
 
-ADD_BONUS_REWARDS = True
-
 class PenEnvV0(mujoco_env.MujocoEnv, utils.EzPickle):
-    def __init__(self):
+    def __init__(self, reward_type="dense", early_termination=False):
         self.target_obj_bid = 0
         self.S_grasp_sid = 0
         self.eps_ball_sid = 0
@@ -44,6 +42,8 @@ class PenEnvV0(mujoco_env.MujocoEnv, utils.EzPickle):
 
         self.act_mid = np.mean(self.model.actuator_ctrlrange, axis=1)
         self.act_rng = 0.5*(self.model.actuator_ctrlrange[:,1]-self.model.actuator_ctrlrange[:,0])
+        self.reward_type = reward_type
+        self.early_termination = early_termination
 
     def step(self, a):
         a = np.clip(a, -1.0, 1.0)
@@ -62,25 +62,32 @@ class PenEnvV0(mujoco_env.MujocoEnv, utils.EzPickle):
 
         # pos cost
         dist = np.linalg.norm(obj_pos-desired_loc)
-        reward = -dist
         # orien cost
         orien_similarity = np.dot(obj_orien, desired_orien)
-        reward += orien_similarity
 
-        if ADD_BONUS_REWARDS:
+        goal_achieved = True if (dist < 0.075 and orien_similarity > 0.95) else False
+
+        sparse_reward = 50 * goal_achieved
+        reward = sparse_reward
+        if self.reward_type == "sparse":
+            reward = sparse_reward
+        elif self.reward_type == "dense":
+            reward += -dist
+            reward += orien_similarity
             # bonus for being close to desired orientation
-            if dist < 0.075 and orien_similarity > 0.9:
+            if orien_similarity > 0.9:
                 reward += 10
-            if dist < 0.075 and orien_similarity > 0.95:
-                reward += 50
+            if obj_pos[2] < 0.075:
+                reward -= 5
+        elif self.reward_type == "binary":
+            reward = goal_achieved - 1
+        else:
+            error
 
         # penalty for dropping the pen
         done = False
-        if obj_pos[2] < 0.075:
-            reward -= 5
+        if self.early_termination:
             done = True if not starting_up else False
-
-        goal_achieved = True if (dist < 0.075 and orien_similarity > 0.95) else False
 
         return self.get_obs(), reward, done, dict(goal_achieved=goal_achieved)
 

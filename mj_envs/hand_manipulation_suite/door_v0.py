@@ -7,14 +7,14 @@ import os
 ADD_BONUS_REWARDS = True
 
 class DoorEnvV0(mujoco_env.MujocoEnv, utils.EzPickle):
-    def __init__(self):
+    def __init__(self, reward_type="dense"):
         self.door_hinge_did = 0
         self.door_bid = 0
         self.grasp_sid = 0
         self.handle_sid = 0
         curr_dir = os.path.dirname(os.path.abspath(__file__))
         mujoco_env.MujocoEnv.__init__(self, curr_dir+'/assets/DAPG_door.xml', 5)
-        
+
         # change actuator sensitivity
         self.sim.model.actuator_gainprm[self.sim.model.actuator_name2id('A_WRJ1'):self.sim.model.actuator_name2id('A_WRJ0')+1,:3] = np.array([10, 0, 0])
         self.sim.model.actuator_gainprm[self.sim.model.actuator_name2id('A_FFJ3'):self.sim.model.actuator_name2id('A_THJ0')+1,:3] = np.array([1, 0, 0])
@@ -30,6 +30,8 @@ class DoorEnvV0(mujoco_env.MujocoEnv, utils.EzPickle):
         self.handle_sid = self.model.site_name2id('S_handle')
         self.door_bid = self.model.body_name2id('frame')
 
+        self.reward_type = reward_type
+
     def step(self, a):
         a = np.clip(a, -1.0, 1.0)
         try:
@@ -42,23 +44,22 @@ class DoorEnvV0(mujoco_env.MujocoEnv, utils.EzPickle):
         palm_pos = self.data.site_xpos[self.grasp_sid].ravel()
         door_pos = self.data.qpos[self.door_hinge_did]
 
-        # get to handle
-        reward = -0.1*np.linalg.norm(palm_pos-handle_pos)
-        # open door
-        reward += -0.1*(door_pos - 1.57)*(door_pos - 1.57)
-        # velocity cost
-        reward += -1e-5*np.sum(self.data.qvel**2)
-
-        if ADD_BONUS_REWARDS:
-            # Bonus
-            if door_pos > 0.2:
-                reward += 2
-            if door_pos > 1.0:
-                reward += 8
-            if door_pos > 1.35:
-                reward += 10
-
         goal_achieved = True if door_pos >= 1.35 else False
+
+        sparse_reward = 10 * goal_achieved + \
+            8 * (door_pos > 1.0) + \
+            2 * (door_pos > 1.2) - \
+            0.1 * (door_pos - 1.57)*(door_pos - 1.57)
+        reward = sparse_reward
+        if self.reward_type == "sparse":
+            reward = sparse_reward
+        elif self.reward_type == "dense":
+            # get to handle
+            reward += -0.1 np.linalg.norm(palm_pos-handle_pos)
+        elif self.reward_type == "binary":
+            reward = goal_achieved - 1
+        else:
+            error
 
         return ob, reward, False, dict(goal_achieved=goal_achieved)
 

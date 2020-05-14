@@ -8,7 +8,7 @@ import os
 ADD_BONUS_REWARDS = True
 
 class HammerEnvV0(mujoco_env.MujocoEnv, utils.EzPickle):
-    def __init__(self):
+    def __init__(self, reward_type="dense"):
         self.target_obj_sid = -1
         self.S_grasp_sid = -1
         self.obj_bid = -1
@@ -23,7 +23,7 @@ class HammerEnvV0(mujoco_env.MujocoEnv, utils.EzPickle):
         self.sim.model.actuator_gainprm[self.sim.model.actuator_name2id('A_FFJ3'):self.sim.model.actuator_name2id('A_THJ0')+1,:3] = np.array([1, 0, 0])
         self.sim.model.actuator_biasprm[self.sim.model.actuator_name2id('A_WRJ1'):self.sim.model.actuator_name2id('A_WRJ0')+1,:3] = np.array([0, -10, 0])
         self.sim.model.actuator_biasprm[self.sim.model.actuator_name2id('A_FFJ3'):self.sim.model.actuator_name2id('A_THJ0')+1,:3] = np.array([0, -1, 0])
-        
+
         self.target_obj_sid = self.sim.model.site_name2id('S_target')
         self.S_grasp_sid = self.sim.model.site_name2id('S_grasp')
         self.obj_bid = self.sim.model.body_name2id('Object')
@@ -31,6 +31,8 @@ class HammerEnvV0(mujoco_env.MujocoEnv, utils.EzPickle):
         self.goal_sid = self.sim.model.site_name2id('nail_goal')
         self.act_mid = np.mean(self.model.actuator_ctrlrange, axis=1)
         self.act_rng = 0.5 * (self.model.actuator_ctrlrange[:, 1] - self.model.actuator_ctrlrange[:, 0])
+
+        self.reward_type = reward_type
 
     def step(self, a):
         a = np.clip(a, -1.0, 1.0)
@@ -45,28 +47,30 @@ class HammerEnvV0(mujoco_env.MujocoEnv, utils.EzPickle):
         tool_pos = self.data.site_xpos[self.tool_sid].ravel()
         target_pos = self.data.site_xpos[self.target_obj_sid].ravel()
         goal_pos = self.data.site_xpos[self.goal_sid].ravel()
-        
-        # get to hammer
-        reward = - 0.1 * np.linalg.norm(palm_pos - obj_pos)
-        # take hammer head to nail
-        reward -= np.linalg.norm((tool_pos - target_pos))
-        # make nail go inside
-        reward -= 10 * np.linalg.norm(target_pos - goal_pos)
-        # velocity penalty
-        reward -= 1e-2 * np.linalg.norm(self.data.qvel.ravel())
 
-        if ADD_BONUS_REWARDS:
+        goal_achieved = True if np.linalg.norm(target_pos - goal_pos) < 0.010 else False
+
+        sparse_reward = 75 * goal_achieved + \
+            25 * (np.linalg.norm(target_pos - goal_pos) < 0.020) - \
+            10 * np.linalg.norm(target_pos - goal_pos) # make nail go inside
+        reward = sparse_reward
+        if self.reward_type == "sparse":
+            reward = sparse_reward
+        elif self.reward_type == "dense":
+            # get to hammer
+            reward -= - 0.1 * np.linalg.norm(palm_pos - obj_pos)
+            # velocity penalty
+            reward -= 1e-2 * np.linalg.norm(self.data.qvel.ravel())
             # bonus for lifting up the hammer
             if obj_pos[2] > 0.04 and tool_pos[2] > 0.04:
                 reward += 2
+        elif self.reward_type == "binary":
+            reward = goal_achieved - 1
+        else:
+            error
 
-            # bonus for hammering the nail
-            if (np.linalg.norm(target_pos - goal_pos) < 0.020):
-                reward += 25
-            if (np.linalg.norm(target_pos - goal_pos) < 0.010):
-                reward += 75
-
-        goal_achieved = True if np.linalg.norm(target_pos - goal_pos) < 0.010 else False
+        # take hammer head to nail # does not seem to be in the reward fn
+        # reward -= np.linalg.norm((tool_pos - target_pos))
 
         return ob, reward, False, dict(goal_achieved=goal_achieved)
 
