@@ -11,6 +11,8 @@ class RelocateEnvV0(mujoco_env.MujocoEnv, utils.EzPickle):
         self.target_obj_sid = 0
         self.S_grasp_sid = 0
         self.obj_bid = 0
+        self.reward_type = reward_type
+
         curr_dir = os.path.dirname(os.path.abspath(__file__))
         mujoco_env.MujocoEnv.__init__(self, curr_dir+'/assets/DAPG_relocate.xml', 5)
 
@@ -26,8 +28,6 @@ class RelocateEnvV0(mujoco_env.MujocoEnv, utils.EzPickle):
         utils.EzPickle.__init__(self)
         self.act_mid = np.mean(self.model.actuator_ctrlrange, axis=1)
         self.act_rng = 0.5*(self.model.actuator_ctrlrange[:,1]-self.model.actuator_ctrlrange[:,0])
-
-        self.reward_type = reward_type
 
     def step(self, a):
         a = np.clip(a, -1.0, 1.0)

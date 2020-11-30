@@ -18,6 +18,9 @@ class PenEnvV0(mujoco_env.MujocoEnv, utils.EzPickle):
         self.pen_length = 1.0
         self.tar_length = 1.0
 
+        self.reward_type = reward_type
+        self.early_termination = early_termination
+
         curr_dir = os.path.dirname(os.path.abspath(__file__))
         mujoco_env.MujocoEnv.__init__(self, curr_dir+'/assets/DAPG_pen.xml', 5)
 
@@ -42,8 +45,6 @@ class PenEnvV0(mujoco_env.MujocoEnv, utils.EzPickle):
 
         self.act_mid = np.mean(self.model.actuator_ctrlrange, axis=1)
         self.act_rng = 0.5*(self.model.actuator_ctrlrange[:,1]-self.model.actuator_ctrlrange[:,0])
-        self.reward_type = reward_type
-        self.early_termination = early_termination
 
     def step(self, a):
         a = np.clip(a, -1.0, 1.0)

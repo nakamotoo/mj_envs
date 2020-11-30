@@ -12,6 +12,8 @@ class DoorEnvV0(mujoco_env.MujocoEnv, utils.EzPickle):
         self.door_bid = 0
         self.grasp_sid = 0
         self.handle_sid = 0
+        self.reward_type = reward_type
+
         curr_dir = os.path.dirname(os.path.abspath(__file__))
         mujoco_env.MujocoEnv.__init__(self, curr_dir+'/assets/DAPG_door.xml', 5)
 
@@ -29,8 +31,6 @@ class DoorEnvV0(mujoco_env.MujocoEnv, utils.EzPickle):
         self.grasp_sid = self.model.site_name2id('S_grasp')
         self.handle_sid = self.model.site_name2id('S_handle')
         self.door_bid = self.model.body_name2id('frame')
-
-        self.reward_type = reward_type
 
     def step(self, a):
         a = np.clip(a, -1.0, 1.0)
@@ -55,7 +55,7 @@ class DoorEnvV0(mujoco_env.MujocoEnv, utils.EzPickle):
             reward = sparse_reward
         elif self.reward_type == "dense":
             # get to handle
-            reward += -0.1 np.linalg.norm(palm_pos-handle_pos)
+            reward += -0.1 * np.linalg.norm(palm_pos-handle_pos)
         elif self.reward_type == "binary":
             reward = goal_achieved - 1
         else:
@@ -76,6 +76,8 @@ class DoorEnvV0(mujoco_env.MujocoEnv, utils.EzPickle):
         else:
             door_open = -1.0
         latch_pos = qp[-1]
+        # len(qp[1:-2]) == 27
+        # import ipdb; ipdb.set_trace()
         return np.concatenate([qp[1:-2], [latch_pos], door_pos, palm_pos, handle_pos, palm_pos-handle_pos, [door_open]])
 
     def reset_model(self):
