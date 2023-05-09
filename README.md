@@ -6,7 +6,7 @@
 
 1. Clone this repo with pre-populated submodule dependencies
 ```
-$ git clone --recursive https://github.com/vikashplus/mj_envs.git
+$ git clone --recursive https://github.com/nakamotoo/mj_envs.git
 ```
 2. Update submodules
 ```
